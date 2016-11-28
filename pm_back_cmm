@@ -1,0 +1,5 @@
+cd ~/bitbucket-repos/pm-back
+read -p 'commit message: ' cmessage
+git add -A
+git commit -m '$cmessage'
+git push origin master

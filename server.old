@@ -1,0 +1,446 @@
+var express = require('express'),
+    app = express(),
+    mysql = require('mysql'),
+    bodyParser = require('body-parser'),
+    nodemailer = require('nodemailer'),
+    pool = mysql.createPool({
+        host: 'localhost',
+        user: 'root',
+        password: '1234',
+        database: 'pichangamaker'
+    });
+
+var servicehost = "http://localhost";
+
+// https://www.google.com/settings/security/lesssecureapps
+var transporter = nodemailer.createTransport({
+    service: 'Gmail',
+    auth: {
+        user: 'pichangamaker@gmail.com',
+        pass: 'Pichanga123'
+    }
+});
+
+var mailData = {
+    minRaized: {
+        from: 'PichangaMaker® <pichangamaker@verizon.com>',
+        subject: 'Pichanga Confirmed!',
+        text: 'The minimum number of players required for the Pichanga was reached ✔'
+    },
+    deletedPichanga: {
+        from: 'PichangaMaker® <pichangamaker@verizon.com>',
+        subject: 'Pichanga Canceled',
+        text: 'The Pichanga was canceled. We are so sorry'  
+    },
+    removedFromPichanga: {
+        from: 'PichangaMaker® <pichangamaker@verizon.com>',
+        subject: 'Removed from Pichanga',
+        text: 'You were removed from the Pichanga'    
+    },
+    activateAccount: {
+        from: 'PichangaMaker® <pichangamaker@verizon.com>',
+        subject: 'Activate your account',
+        text: 'You need to verify that you own this email account'    
+    }
+}
+
+app.set('port', (process.env.PORT || 4000));
+
+var staticPath = "../../";
+app.use(express.static(staticPath));
+app.use(bodyParser.json()); 
+
+app.all('/*', function(req, res, next) {
+    // res.header("Access-Control-Allow-Origin", "*");
+    res.header("Content-Type", "application/json");
+    // res.header("Access-Control-Allow-Headers", "X-Requested-With");
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE, OPTIONS");
+    res.header("Access-Control-Allow-Credentials", false);
+    res.header("Access-Control-Max-Age", '86400'); // 24 hours
+    res.header("Access-Control-Allow-Headers", "X-Requested-With, X-HTTP-Method-Override, Content-Type, Accept");
+    next();
+});
+
+app.get('/pichangas', function(req, res) {
+    res.header("Content-Type", "application/json");
+    
+    pool.getConnection(function(err, connection) {
+        connection.query('  SELECT P.idPichanga, P.nombre, P.fechaInicio, P.fechaFin, P.lugar, P.precio, P.modoPago, P.idPersona, P.observaciones, ' + 
+                         '  P.isPrivate, B.nombre as organizador, P.minIntegrantes, P.maxIntegrantes, P.lat, P.lng ' +
+                         '  FROM pichanga P, persona B ' +
+                         '  WHERE P.idPersona = B.idPersona ' +
+                         '  AND B.idEmpresa = ? ' + 
+                         '  AND date(P.fechaInicio) <= ? ' +
+                         '  AND date(P.fechaFin) >= ? ' , [req.query.idEmpresa, req.query.endDate, req.query.startDate], function(err, rows) {
+            if (err) {
+                res.send(err);
+            }
+            else {
+                res.send({data : rows});
+            }
+            connection.release();
+        });
+    });
+});
+
+app.post('/pichangas', function(req, res){
+    res.header("Content-Type", "application/json");
+    pool.getConnection(function(err, connection){
+        connection.query('  INSERT INTO pichanga (precio, modoPago, fechaInicio, fechaFin, idPersona, nombre, ' +
+                         '  observaciones, lugar, isPrivate, minIntegrantes, maxIntegrantes, lat, lng) VALUES ' +
+                         '  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ' , [req.body.precio, req.body.modoPago, 
+                         req.body.fechaInicio, req.body.fechaFin, req.body.idPersona, 
+                         req.body.nombre, req.body.observaciones, req.body.lugar, 
+                         req.body.isPrivate, req.body.minIntegrantes, req.body.maxIntegrantes, req.body.lat, req.body.lng], function(err, rows) {
+            if (err) { 
+               res.send(err);
+            }
+            else{
+                res.send({data: []});
+            }
+            connection.release();
+        });
+    });
+});
+
+app.delete('/pichangas', function(req, res){
+    res.header("Content-Type", "application/json");
+    pool.getConnection(function(err, connection){
+
+        var query = ' SELECT B.email, B.nombre FROM asistentes A, persona B WHERE A.idPichanga = ? AND A.idPersona = B.idPersona ';
+
+        mailPichangaRelated(req.body, mailData.deletedPichanga, query, function(respuesta){
+
+            console.log("Message sent: " + respuesta.response);
+
+            connection.query('  DELETE FROM asistentes WHERE idPichanga = ? ', [req.body.idPichanga], function(err, rows) {
+                if (err) { 
+                    console.log(err);
+                }
+                else{
+                }
+            });
+            connection.query('  DELETE FROM pichanga WHERE idPichanga = ? ', [req.body.idPichanga], function(err, rows) {
+                if (err) { 
+                    res.send(err);
+                }
+                else{
+                    res.send({data: []});
+                }
+                connection.release();
+            });
+        });
+        
+    });
+});
+
+app.get('/asistentes', function(req, res){
+    res.header("Content-Type", "application/json");
+
+    pool.getConnection(function(err, connection){
+        connection.query('  SELECT A.idPichanga, B.idPersona, B.dni, B.nombre, A.pagoRealizado, A.observaciones ' +
+                         '  FROM asistentes A, persona B ' +
+                         '  WHERE A.idPichanga = ? AND ' +
+                         '  A.idPersona = B.idPersona ', [req.query.pichanga], function(err, rows) {
+
+            if (err) { 
+                res.send(err);
+            } 
+            else {
+                res.send({data: rows});
+            }
+            connection.release();
+        });
+    });
+});
+
+app.post('/asistentes', function(req, res){
+    res.header("Content-Type", "application/json");
+    pool.getConnection(function(err, connection){
+        connection.query('  INSERT INTO asistentes (idPichanga, idPersona, pagoRealizado, observaciones) ' +
+                         '  VALUES (?, ?, ?, ?) ', [req.body.idPichanga, req.body.idPersona, 
+                         req.body.pagoRealizado, req.body.observaciones], function(err, rows) {
+            if (err) { 
+               res.send(err);
+            }
+            else{
+                res.send({data: rows});
+
+                if(req.body.minIntegrantes == (req.body.cantInscritos + 1)){
+
+                    var query = ' SELECT B.email, B.nombre FROM asistentes A, persona B WHERE A.idPichanga = ? AND A.idPersona = B.idPersona ';
+
+                    mailPichangaRelated(req.body, mailData.minRaized, query, function(respuesta){
+                        console.log("Message sent: " + respuesta.response);
+                    });
+                }
+                
+            }
+            connection.release();
+        });
+    });
+});
+
+app.delete('/asistentes', function(req, res){
+    res.header("Content-Type", "application/json");
+    pool.getConnection(function(err, connection){
+
+        var query = ' SELECT B.email, B.nombre FROM asistentes A, persona B WHERE A.idPichanga = ? AND A.idPersona = B.idPersona AND A.idPersona = ? ';
+
+        mailPichangaRelated(req.body, mailData.removedFromPichanga, query, function(respuesta){
+
+            console.log("Message sent: " + respuesta.response);
+
+            connection.query('  DELETE FROM asistentes WHERE idPichanga = ? AND idPersona = ? '
+                             , [req.body.idPichanga, req.body.idPersona], function(err, rows) {
+                if (err) { 
+                   res.send(err);
+                }
+                else{
+                    res.send({data: []});
+                }
+                connection.release();
+            });
+
+        });
+
+
+    });
+});
+
+app.get('/login', function(req, res){
+    res.header("Content-Type", "application/json");
+    pool.getConnection(function(err, connection){
+        connection.query('  SELECT B.idPersona, A.user, B.dni, B.nombre, C.idEmpresa, B.email, ' +
+                         '  C.nombre as nombreEmpresa, C.lat, C.lng, A.pass ' +
+                         '  FROM login A, persona B, empresa C ' +
+                         '  WHERE A.user = ? ' +
+                         '  AND A.pass = COMPRESS(?) ' +
+                         '  AND A.user = B.user ' +
+                         '  AND B.idEmpresa = C.idEmpresa ' +
+                         '  AND A.verified = TRUE ' +
+                         '  LIMIT 1 ', [req.query.user, req.query.pass], function(err, rows) {
+            if (err) { 
+               res.send(err);
+            } 
+            else {
+                res.send({data: rows});
+            }
+            connection.release();
+        });
+
+    });
+});
+
+app.get('/verifymail', function(req, res){
+    res.header("Content-Type", "application/json");
+    pool.getConnection(function(err, connection){
+        connection.query('  UPDATE login ' +
+                         '  SET verified = TRUE ' +
+                         '  WHERE token = ? ', [req.query.token], function(err, rows) {
+            if (err) { 
+                res.send(err);
+            } 
+            else {
+                res.send("Su usuario se ha activado");
+            }
+            connection.release();
+        });
+
+    });
+});
+
+
+app.get('/empresas', function(req, res){
+    res.header("Content-Type", "application/json");
+    pool.getConnection(function(err, connection){
+        connection.query('  SELECT idEmpresa, nombre, lat, lng FROM empresa ', 
+                            function(err, rows) {
+            if (err) {
+               res.send(err);
+            } 
+            else {
+                res.send({data: rows});
+            }
+            connection.release();
+        });
+
+    });
+});
+
+app.post('/personas', function(req, res){
+    res.header("Content-Type", "application/json");
+    pool.getConnection(function(err, connection){
+
+        var token = "";
+        var user = req.body.user;
+
+        for(var i = 0; i < user.length; i++){
+            token += user.charCodeAt(i).toString(16);
+        }
+
+        connection.query('  INSERT INTO login (user, pass, verified, token) ' +
+                         '  VALUES (?, COMPRESS(?), ?, ?) ', [req.body.user, req.body.pass, false, token], function(err, rows) {
+            if (err) { 
+               res.send({
+                    err: err,
+                    me: "Seleccione otro usuario"
+               })
+            }
+            else{
+
+                connection.query('  INSERT INTO persona (dni, nombre, telefono, idEmpresa, email, user) ' +
+                                 '  VALUES (?, ?, ?, ?, ?, ?) ', [req.body.dni, req.body.nombre, req.body.telefono,
+                                    req.body.idEmpresa, req.body.email, req.body.user] , function(err, rows) {
+                    if (err) { 
+                        res.send({
+                            err : err,
+                            me: "Error en INSERT persona"
+                        });     
+                    }
+                    else{
+                        sendMailActivateAccount(req.body, token, mailData.activateAccount);
+
+                        res.send({
+                            data: rows,
+                            me: ""
+                        });
+                    }            
+                });
+
+            }            
+        });
+
+        connection.release();
+    });
+});
+
+function sendMailActivateAccount(info, token, mailObject){
+    
+    var link = servicehost + "verifymail?token=" + token;
+    
+    var sendText = "<html>Dear User " + info.nombre + "<br/><br/>";
+    sendText += mailObject.text + "<br/><br/>";
+    sendText += "Please go to the next link to verify the following user: <strong>" + info.user + "</strong><br/><br/>";
+    sendText += link;
+
+    sendText += "</html>";
+
+    var mailOptions = {
+        from: mailObject.from,
+        to: info.email,
+        subject: mailObject.subject,
+        html: sendText 
+    };
+
+    transporter.sendMail(mailOptions, function(error, info){
+        if(error) {
+            console.log(error);
+        }
+        else {
+            console.log('Message sent: ' + info.response);
+        }
+    });
+}
+
+function mailPichangaRelated(infoUtil, mailObject, query, callback){
+    console.log('mailLog: ' + mailObject.text);
+    pool.getConnection(function(err, connection){
+        connection.query( query , [infoUtil.idPichanga, infoUtil.idPersona], function(err, rows) {
+
+            if (err) { 
+                if (typeof(callback) == "function"){
+                    callback(err);
+                }
+            } 
+            else {
+
+                if(rows.length){
+
+                    var sendText = "<html>" + mailObject.text + "<br/><br/>";
+                    sendText += "The organizator will contact you to tell about the details<br/><br/>";
+                    sendText += "Pichanga: " + infoUtil.title + "<br/><br/>";
+                    sendText += "Organizer: " + infoUtil.organizador + "<br/><br/>";
+                    sendText += "Costo: S/." + infoUtil.costo + "<br/><br/>";
+                    sendText += "Confirmed Assistants to the Pichanga<br/>";
+
+                    sendText += "<ul>"
+                    var mailArray = [];
+                    for (i = 0; i < rows.length; i++){
+                        mailArray.push(rows[i].email)
+                        sendText += "<li>" + rows[i].nombre + "</li>";
+                    }
+                    sendText += "</ul><br/>";
+                    var toMails = mailArray.toString();
+
+                    sendText += "Thanks!!<br/><br/>";
+
+                    sendText += "PichangaMaker®</html>";
+
+
+                    var mailOptions = {
+                        from: mailObject.from, // sender address 
+                        to: toMails, // list of receivers 
+                        subject: mailObject.subject, // Subject line 
+                        html: sendText // plaintext body 
+                    };
+                     
+                    // send mail with defined transport object 
+                    transporter.sendMail(mailOptions, function(error, info){
+                        if(error){
+                            if (typeof(callback) == "function"){
+                                callback(error);
+                            }
+                        }else{
+                            //console.log('Message sent: ' + info.response);
+                            if (typeof(callback) == "function"){
+                                callback(info);
+                            }
+                        }
+                    });
+
+                }
+                else{
+                    if (typeof(callback) == "function"){
+                        callback({response: "No users affected"});
+                    }
+                        
+                }
+
+            }
+
+            connection.release();
+        });
+    });
+    return ;
+}
+
+
+app.get('/cantmensajes', function(req, res){
+    res.header("Content-Type", "application/json");
+
+    pool.getConnection(function(err, connection){
+        connection.query(' SELECT count(C.texto) as length FROM (SELECT DISTINCT A.idChatLine, A.fecha, A.texto, A.room, A.idPersona, A.user, A.nombre ' +
+                         ' FROM chatline A, connectionhistory B ' +
+                         ' WHERE A.room = ? ' +
+                         ' AND B.idPichanga = A.room ' +
+                         ' AND A.fecha > B.lastConnection ' +
+                         ' AND B.idPersona = ? ' +
+                         ' AND B.user = ?) C ', [req.query.idRoom, req.query.idPersona, req.query.user], function(err, rows) {
+            if (err) {
+                res.send(err);
+            } 
+            else {
+                res.send({data: rows[0].length});
+            }
+            connection.release();
+        });
+    });
+
+});
+
+app.listen(app.get('port'), function() {
+    console.log('Server started: http://localhost:' + app.get('port') + '/');
+    servicehost += ':' + app.get('port') + '/';
+});

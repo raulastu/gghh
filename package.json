@@ -1,0 +1,50 @@
+{
+  "name": "appengine-express",
+  "description": "An example of running Express.js on Google App Engine.",
+  "version": "0.0.1",
+  "private": true,
+  "license": "Apache Version 2.0",
+  "author": "Google Inc.",
+  "engines": {
+    "node": "~4.2"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "test": "mocha -R spec -t 120000 --require intelli-espower-loader ../../test/_setup.js test/*.test.js"
+  },
+  "dependencies": {
+    "body-parser": "*",
+    "cookie-parser": "*",
+    "express": "4.2.x",
+    "express-mysql-session": "*",
+    "express-session": "*",
+    "express-useragent": "*",
+    "jsonwebtoken": "^5.5.4",
+    "mysql": "*",
+    "nodemailer": "*",
+    "request": "*",
+    "rest": "*",
+    "path":"*",
+    "socket.io": "*",
+    "socketio-jwt": "^4.3.4",
+    "jsrsasign":"*",
+    "layer-api":"*",
+    "multer":"*",
+    "s3-uploader":"*",
+    "aws-sdk":"*",
+    "winston": "*",
+    "express-winston": "*",
+    "moment":"*",
+    "firebase":"*",
+    "node-geocoder":"*",
+    "csvtojson":"*"
+  },
+  "devDependencies": {},
+  "preferGlobal": true,
+  "private": true,
+  "publishConfig": {
+    "registry": "https://your-private-hosted-npm.registry.nodejitsu.com"
+  },
+  "subdomain": "foobar",
+  "license": "MIT"
+}

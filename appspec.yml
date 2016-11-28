@@ -1,0 +1,12 @@
+version: 0.0
+os: linux 
+files:
+  - source: /
+    destination: /home/ec2-user/pm-back
+hooks:
+  ApplicationStop:
+    - location: deploy_scripts/stop.sh
+  AfterInstall:
+    - location: deploy_scripts/dependencies.sh
+  ApplicationStart:
+    - location: deploy_scripts/start.sh

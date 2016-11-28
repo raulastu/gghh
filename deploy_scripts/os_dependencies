@@ -1,0 +1,6 @@
+
+
+pm2 global
+
+install ImageMagick following this
+https://gist.github.com/ARolek/9199329

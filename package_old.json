@@ -1,0 +1,67 @@
+{
+  "name": "pichangamaker-back",
+  "version": "1.0.0",
+  "description": "it just works",
+  "author": "pm <markzuckpancho@pichangamaker.com>",
+  "contributors": [
+    {
+      "name": "Foo Bar",
+      "email": "rc@pichangamaker.com"
+    }
+  ],
+  "engines": {
+    "node": "~4.2"
+  },
+  "bin": {},
+  "scripts": {
+    "test": "vows --spec --isolate",
+    "start": "node index.js",
+    "predeploy": "echo im about to deploy",
+    "deploy": "gcloud preview app deploy",
+    "postdeploy": "echo ive deployed",
+    "prepublish": ""
+  },
+  "main": "lib/foo.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nodejitsu/browsenpm.org"
+  },
+  "bugs": {
+    "url": "https://github.com/nodejitsu/browsenpm.org/issues"
+  },
+  "keywords": [
+    "example"
+  ],
+  "dependencies": {
+    "body-parser": "*",
+    "cookie-parser": "*",
+    "express": "4.2.x",
+    "express-mysql-session": "*",
+    "express-session": "*",
+    "express-useragent": "*",
+    "jsonwebtoken": "^5.5.4",
+    "mysql": "*",
+    "nodemailer": "*",
+    "request": "*",
+    "rest": "*",
+    "path":"*",
+    "socket.io": "*",
+    "socketio-jwt": "^4.3.4",
+    "jsrsasign":"*",
+    "layer-api":"*",
+    "multer":"*",
+    "s3-uploader":"*",
+    "aws-sdk":"*",
+    "winston": "*",
+    "express-winston": "*"
+  },
+  "devDependencies": {},
+  "preferGlobal": true,
+  "private": true,
+  "publishConfig": {
+    "registry": "https://your-private-hosted-npm.registry.nodejitsu.com"
+  },
+  "subdomain": "foobar",
+  "analyze": true,
+  "license": "MIT"
+}
